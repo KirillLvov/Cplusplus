@@ -23,37 +23,52 @@ Process::Process(const std::string& path) {
     }
     
     if (cpid == 0) {
-        close(pipe_read[0]);
-        close(pipe_write[1]);
-        execl(path, NULL);
+        ::close(pipe_read[0]);
+        ::close(pipe_write[1]);
+        if(execl(path, NULL) == -1) {
+            std::cerr << "exec error";
+            exit(3);
+        }
     }
     else {
         this->child_pid = cpid;
-        close(pipe_read[1]);
+        ::close(pipe_read[1]);
         this->fd_read = pipe_read[0];
-        close(pipe_write[0]);
+        ::close(pipe_write[0]);
         this->fd_write = pipe_write[1];
     }
 }
 
 Process::~Process() {
-    close(this->fd_read);
-    close(this->fd_write);
+    if(this->fd_read > 0) {
+        ::close(this->fd_read);
+        this->fd_read = -1;
+    }
+    if(this->fd_write > 0) {
+        ::close(this->fd_write);
+        this->fd_write = -1;
+    }
+    kill(this->child_pid, SIGINT);
+    wait(0);
 }
 
 size_t Process::write(const void* data, size_t len) {
-    write(this->fd_write, data, len);
-    return len;
+    if(::write(this->fd_write, data, len) == len)
+        return len;
+    else
+        throw -1;
 }
 
 void Process::writeExact(const void* data, size_t len) {
     for(int i=0; i<len; i++)
-        write(data+i, len);
+        write(static_cast<const char*>(data)+i, 1);
 }
 
-size_t Process::read(const void* data, size_t len) {
-    read(this->fd_read, data, len);
-    return len;
+size_t Process::read(void* data, size_t len) {
+    if(::read(this->fd_read, data, len) == len)
+        return len;
+    else
+        throw -1;
 }
 
 void Process::readExact(void* data, size_t len) {
@@ -62,12 +77,21 @@ void Process::readExact(void* data, size_t len) {
 }
 
 void Process::closeStdin() {
-    close(this->fd_write);    
+    if(this->fd_write > 0) {
+        ::close(this->fd_write);
+        this->fd_write = -1;
+    }  
 }
 
 void Process::close() {
-    close(this->fd_read);
-    close(this->fd_write);
+    if(this->fd_read > 0) {
+        ::close(this->fd_read);
+        this->fd_read = -1;
+    }
+    if(this->fd_write > 0) {
+        ::close(this->fd_write);
+        this->fd_write = -1;
+    }
     kill(this->child_pid, SIGINT);
     wait(0);
 }
