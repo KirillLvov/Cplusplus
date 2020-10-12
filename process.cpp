@@ -95,3 +95,4 @@ void Process::close() {
     kill(this->child_pid, SIGINT);
     wait(0);
 }
+
