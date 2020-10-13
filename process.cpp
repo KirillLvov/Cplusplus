@@ -1,97 +1,99 @@
 #include "process.h"
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
 
 Process::Process(const std::string& path) {
     int pipe_read[2], pipe_write[2];
-    if (pipe(pipe_read) == -1) {
-        std::cerr << "pipe error";
-        exit(1);
-    }
+    if (pipe(pipe_read) == -1)
+        throw std::runtime_error("Pipe error");
     if (pipe(pipe_write) == -1) {
-        std::cerr << "pipe error";
-        exit(1);
-    }
-    
-    pid_t cpid = fork();
-    if (cpid == -1) {
-        std::cerr << "fork error";
-        exit(2);
-    }
-    
-    if (cpid == 0) {
         ::close(pipe_read[0]);
+        ::close(pipe_read[1]);
+        throw std::runtime_error("Pipe error");
+    }
+    
+    child_pid_ = fork();
+    if (child_pid_ == -1)
+        throw std::runtime_error("Fork error");
+    
+    if (child_pid_ == 0) {
+        ::close(pipe_read[0]);
+        if(dup2(pipe_read[1], 1) == -1)
+            throw std::runtime_error("Dup2 error");
+        ::close(pipe_read[1]);
         ::close(pipe_write[1]);
-        if(execl(path, NULL) == -1) {
-            std::cerr << "exec error";
-            exit(3);
-        }
+        if(dup2(pipe_write[0], 0) == -1)
+            throw std::runtime_error("Dup2 error");
+        /*if(execl(path.c_str(), NULL) == -1)
+            throw std::runtime_error("Exec error");*/
     }
     else {
-        this->child_pid = cpid;
         ::close(pipe_read[1]);
-        this->fd_read = pipe_read[0];
+        fd_read_ = pipe_read[0];
         ::close(pipe_write[0]);
-        this->fd_write = pipe_write[1];
+        fd_write_ = pipe_write[1];
     }
 }
 
 Process::~Process() {
-    if(this->fd_read > 0) {
-        ::close(this->fd_read);
-        this->fd_read = -1;
-    }
-    if(this->fd_write > 0) {
-        ::close(this->fd_write);
-        this->fd_write = -1;
-    }
-    kill(this->child_pid, SIGINT);
-    wait(0);
+    close();
 }
 
 size_t Process::write(const void* data, size_t len) {
-    if(::write(this->fd_write, data, len) == len)
-        return len;
+    int ret = ::write(fd_write_, data, len);
+    if(ret != -1)
+        return ret;
     else
-        throw -1;
+        throw std::runtime_error("Write error");
 }
 
 void Process::writeExact(const void* data, size_t len) {
-    for(int i=0; i<len; i++)
-        write(static_cast<const char*>(data)+i, 1);
+    size_t left = len;
+    size_t ret;
+    while(left > 0) {
+        ret = write(static_cast<const char*>(data)+len-left, left);
+        left -= ret;
+    }
 }
 
 size_t Process::read(void* data, size_t len) {
-    if(::read(this->fd_read, data, len) == len)
-        return len;
+    int ret = ::read(fd_read_, data, len);
+    if(ret != -1)
+        return ret;
     else
-        throw -1;
+        throw std::runtime_error("Read error");
 }
 
 void Process::readExact(void* data, size_t len) {
-    for (int i=0; i<len; i++)
-        read(static_cast<char*>(data)+i, 1);
+    size_t left = len;
+    size_t ret;
+    while(left > 0) {
+        ret = read(static_cast<char*>(data)+len-left, left);
+        left -= ret;
+    }
 }
 
 void Process::closeStdin() {
-    if(this->fd_write > 0) {
-        ::close(this->fd_write);
-        this->fd_write = -1;
+    if(fd_write_ > 0) {
+        ::close(fd_write_);
+        fd_write_ = -1;
     }  
 }
 
 void Process::close() {
-    if(this->fd_read > 0) {
-        ::close(this->fd_read);
-        this->fd_read = -1;
+    if(fd_read_ > 0) {
+        ::close(fd_read_);
+        fd_read_ = -1;
     }
-    if(this->fd_write > 0) {
-        ::close(this->fd_write);
-        this->fd_write = -1;
+    if(fd_write_ > 0) {
+        ::close(fd_write_);
+        fd_write_ = -1;
     }
-    kill(this->child_pid, SIGINT);
-    wait(0);
+    kill(child_pid_, SIGINT);
+    int* status;
+    wait(status);
 }
