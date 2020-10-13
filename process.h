@@ -3,9 +3,9 @@
 class Process
 {
 private:
-    int fd_write;
-    int fd_read;
-    int child_pid;
+    int fd_write_;
+    int fd_read_;
+    int child_pid_;
 public:
 	explicit Process(const std::string& path);
 	~Process();
