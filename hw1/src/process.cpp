@@ -17,19 +17,30 @@ Process::Process(const std::string& path) {
     }
     
     child_pid_ = fork();
-    if (child_pid_ == -1)
-        throw std::runtime_error("Fork error");
+    if (child_pid_ == -1) {
+	::close(pipe_read[0];
+	::close(pipe_read[1];
+	::close(pipe_write[0];
+	::close(pipe_write[1];
+	throw std::runtime_error("Fork error");
+    }
     
     if (child_pid_ == 0) {
         ::close(pipe_read[0]);
-        if(dup2(pipe_read[1], 1) == -1)
+        if(dup2(pipe_read[1], 1) == -1) {
+	    ::close(pipe_read[1];
+	    ::close(pipe_write[0];
+	    ::close(pipe_write[1];
             throw std::runtime_error("Dup2 error");
+	}
         ::close(pipe_read[1]);
         ::close(pipe_write[1]);
-        if(dup2(pipe_write[0], 0) == -1)
+        if(dup2(pipe_write[0], 0) == -1) {
+	    ::close(pipe_write[0];
             throw std::runtime_error("Dup2 error");
-        /*if(execl(path.c_str(), NULL) == -1)
-            throw std::runtime_error("Exec error");*/
+	}
+        if(execl(path.c_str(), NULL) == -1)
+            throw std::runtime_error("Exec error");
     }
     else {
         ::close(pipe_read[1]);
@@ -45,10 +56,12 @@ Process::~Process() {
 
 size_t Process::write(const void* data, size_t len) {
     int ret = ::write(fd_write_, data, len);
-    if(ret != -1)
-        return ret;
-    else
+    if(ret == -1) {
+	::close(fd_read_);
+	::close(fd_write_);
         throw std::runtime_error("Write error");
+    }
+    return ret;
 }
 
 void Process::writeExact(const void* data, size_t len) {
@@ -56,16 +69,23 @@ void Process::writeExact(const void* data, size_t len) {
     size_t ret;
     while(left > 0) {
         ret = write(static_cast<const char*>(data)+len-left, left);
+	if (ret == 0) {
+		::close(fd_read_);
+		::close(fd_write_);
+		throw std::runtime_error("Cannot write");
+	}
         left -= ret;
     }
 }
 
 size_t Process::read(void* data, size_t len) {
     int ret = ::read(fd_read_, data, len);
-    if(ret != -1)
-        return ret;
-    else
-        throw std::runtime_error("Read error");
+    if(ret == -1) {
+        ::close(fd_read_);
+	::close(fd_write_);
+	throw std::runtime_error("Read error");
+    }
+    return ret;
 }
 
 void Process::readExact(void* data, size_t len) {
@@ -73,7 +93,12 @@ void Process::readExact(void* data, size_t len) {
     size_t ret;
     while(left > 0) {
         ret = read(static_cast<char*>(data)+len-left, left);
-        left -= ret;
+        if (ret == 0) {
+		::close(fd_read_);
+		::close(fd_write_);
+		throw std::runtime_error("write_error")
+	}
+	left -= ret;
     }
 }
 
@@ -95,5 +120,5 @@ void Process::close() {
     }
     kill(child_pid_, SIGINT);
     int* status;
-    wait(status);
+    waitpid(child_pid_, status, 0);
 }
