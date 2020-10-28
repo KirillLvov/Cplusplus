@@ -1,9 +1,12 @@
+#include <string>
+#include <unistd.h>
+
 class Process
 {
 private:
-    int fd_write_;
-    int fd_read_;
-    int child_pid_;
+	int fd_write_;
+	int fd_read_;
+	int child_pid_;
 public:
 	explicit Process(const std::string& path);
 	~Process();
