@@ -65,8 +65,8 @@ void Process::writeExact(const void* data, size_t len) {
 	size_t ret;
 	while(left > 0) {
 		ret = write(static_cast<const char*>(data)+len-left, left);
-	if (ret == 0)
-		throw std::runtime_error("No write");
+		if (ret == 0)
+			throw std::runtime_error("No write");
 		left -= ret;
 	}
 }
@@ -86,7 +86,7 @@ void Process::readExact(void* data, size_t len) {
 		if (ret == 0)
 			throw std::runtime_error("No read");
 		left -= ret;
-    }
+	}
 }
 
 void Process::closeStdin() {
